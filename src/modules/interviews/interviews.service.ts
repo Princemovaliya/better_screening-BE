@@ -7,6 +7,7 @@ import {
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { getEnv } from '@config/env';
+import { ActivityService, ActivityType } from '@module/activity';
 import { MailService } from '@core/mail';
 import { Candidate, CandidateStage } from '@module/candidates/entities';
 import { CandidatesService } from '@module/candidates/candidates.service';
@@ -39,6 +40,7 @@ export class InterviewsService {
     private readonly interviewSessionService: InterviewSessionService,
     private readonly mailService: MailService,
     private readonly evaluationProcessingProducer: EvaluationProcessingProducerService,
+    private readonly activityService: ActivityService,
   ) {}
 
   async schedule(
@@ -95,6 +97,12 @@ export class InterviewsService {
       dto.candidateId,
       stageForRoundType(round.type),
     );
+    await this.activityService.log({
+      organizationId,
+      type: ActivityType.INTERVIEW_SCHEDULED,
+      message: `${round.name} scheduled for ${candidate.name}`,
+      actorUserId: createdByUserId,
+    });
 
     return this.findOne(organizationId, saved.id);
   }

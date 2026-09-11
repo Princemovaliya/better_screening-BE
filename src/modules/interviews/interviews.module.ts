@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
+import { ActivityModule } from '@module/activity';
 import { CandidatesModule } from '@module/candidates/candidates.module';
 import { Candidate } from '@module/candidates/entities';
 import { InterviewSessionModule } from '@module/interview-session';
@@ -16,6 +17,7 @@ import { InterviewsService } from './interviews.service';
     CandidatesModule,
     InterviewSessionModule,
     TranscriptIngestionModule,
+    ActivityModule,
   ],
   controllers: [InterviewsController],
   providers: [InterviewsService],

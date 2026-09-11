@@ -1,6 +1,7 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
+import { ActivityService, ActivityType } from '@module/activity';
 import { LlmService } from '@core/llm';
 import {
   EmploymentType,
@@ -29,6 +30,7 @@ export class JobsService {
     @InjectRepository(InterviewRoundTemplate)
     private readonly roundTemplatesRepository: Repository<InterviewRoundTemplate>,
     private readonly llmService: LlmService,
+    private readonly activityService: ActivityService,
   ) {}
 
   async create(organizationId: string, createdByUserId: string, dto: CreateJobDto): Promise<Job> {
@@ -60,6 +62,12 @@ export class JobsService {
       ),
     });
     const saved = await this.jobsRepository.save(job);
+    await this.activityService.log({
+      organizationId,
+      type: ActivityType.JOB_CREATED,
+      message: `New job posted: ${saved.title}`,
+      actorUserId: createdByUserId,
+    });
     return this.findOne(organizationId, saved.id);
   }
 

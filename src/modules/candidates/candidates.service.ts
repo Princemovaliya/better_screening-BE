@@ -1,6 +1,7 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
+import { ActivityService, ActivityType } from '@module/activity';
 import { Job } from '@module/jobs/entities';
 import {
   CandidateNote,
@@ -27,6 +28,7 @@ export class CandidatesService {
     private readonly candidateNotesRepository: Repository<CandidateNote>,
     @InjectRepository(Job)
     private readonly jobsRepository: Repository<Job>,
+    private readonly activityService: ActivityService,
   ) {}
 
   private async assertJobInOrg(organizationId: string, jobId: string): Promise<void> {
@@ -51,6 +53,11 @@ export class CandidatesService {
       skills: (dto.skills ?? []).map((name) => this.candidateSkillsRepository.create({ name })),
     });
     const saved = await this.candidatesRepository.save(candidate);
+    await this.activityService.log({
+      organizationId,
+      type: ActivityType.CANDIDATE_CREATED,
+      message: `${saved.name} added as a candidate`,
+    });
     return this.findOne(organizationId, saved.id);
   }
 
@@ -128,6 +135,11 @@ export class CandidatesService {
       { id, organizationId },
       { stage, rejectReason: stage === CandidateStage.REJECTED ? (rejectReason ?? null) : null },
     );
+    await this.activityService.log({
+      organizationId,
+      type: ActivityType.CANDIDATE_STAGE_CHANGED,
+      message: `${candidate.name} moved to ${stage.replace('_', ' ')}`,
+    });
     return this.findOne(organizationId, id);
   }
 

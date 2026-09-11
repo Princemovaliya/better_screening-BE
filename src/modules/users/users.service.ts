@@ -1,7 +1,7 @@
-import { Injectable } from '@nestjs/common';
+import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
-import { User } from './entities';
+import { User, UserRole } from './entities';
 
 /** Fields safe to return to clients — an explicit allowlist (rather than an Omit of
  * secret fields) so a newly added sensitive column can't leak just by being forgotten
@@ -71,5 +71,37 @@ export class UsersService {
     const updated = await this.findById(organizationId, id);
     if (!updated) throw new Error('User not found after update');
     return updated;
+  }
+
+  private countAdmins(organizationId: string): Promise<number> {
+    return this.usersRepository.count({ where: { organizationId, role: UserRole.ADMIN } });
+  }
+
+  async updateRole(organizationId: string, id: string, role: UserRole): Promise<PublicUser> {
+    const target = await this.findById(organizationId, id);
+    if (!target) throw new NotFoundException('Team member not found');
+
+    if (target.role === UserRole.ADMIN && role !== UserRole.ADMIN) {
+      if ((await this.countAdmins(organizationId)) <= 1) {
+        throw new BadRequestException('Cannot demote the only admin — promote someone else first');
+      }
+    }
+
+    await this.usersRepository.update({ id, organizationId }, { role });
+    return toPublicUser((await this.findById(organizationId, id))!);
+  }
+
+  async remove(organizationId: string, requestingUserId: string, id: string): Promise<void> {
+    if (id === requestingUserId) {
+      throw new BadRequestException('You cannot remove yourself from the team');
+    }
+    const target = await this.findById(organizationId, id);
+    if (!target) throw new NotFoundException('Team member not found');
+
+    if (target.role === UserRole.ADMIN && (await this.countAdmins(organizationId)) <= 1) {
+      throw new BadRequestException('Cannot remove the only admin — promote someone else first');
+    }
+
+    await this.usersRepository.delete({ id, organizationId });
   }
 }

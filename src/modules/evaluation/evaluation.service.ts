@@ -2,8 +2,11 @@ import { Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { InjectDataSource, InjectRepository } from '@nestjs/typeorm';
 import { DataSource, Repository } from 'typeorm';
 import { LlmService } from '@core/llm';
+import { ActivityService, ActivityType } from '@module/activity';
 import { Candidate } from '@module/candidates/entities';
 import { Interview, InterviewStatus } from '@module/interviews/entities';
+import { NotificationsService, NotificationType } from '@module/notifications';
+import { OrganizationSettings } from '@module/organizations/entities';
 import { InterviewTranscript } from '@module/transcript-ingestion/entities';
 import { EvaluationRecommendation, InterviewQuestionAnalysis, InterviewSummary } from './entities';
 import { EvaluationLlmResult } from './types/evaluation-llm-result.type';
@@ -51,9 +54,13 @@ export class EvaluationService {
     private readonly summariesRepository: Repository<InterviewSummary>,
     @InjectRepository(InterviewQuestionAnalysis)
     private readonly analysesRepository: Repository<InterviewQuestionAnalysis>,
+    @InjectRepository(OrganizationSettings)
+    private readonly organizationSettingsRepository: Repository<OrganizationSettings>,
     @InjectDataSource()
     private readonly dataSource: DataSource,
     private readonly llmService: LlmService,
+    private readonly activityService: ActivityService,
+    private readonly notificationsService: NotificationsService,
   ) {}
 
   async evaluate(interviewId: string): Promise<void> {
@@ -144,6 +151,28 @@ export class EvaluationService {
     this.logger.log(
       `Persisted evaluation for interview ${interview.id} (score ${result.overallScore})`,
     );
+
+    await this.activityService.log({
+      organizationId: interview.organizationId,
+      type: ActivityType.EVALUATION_COMPLETED,
+      message: `AI evaluation ready for ${interview.candidate?.name ?? 'a candidate'} — ${interview.roundName} (score ${result.overallScore})`,
+    });
+
+    if (interview.createdByUserId) {
+      const settings = await this.organizationSettingsRepository.findOne({
+        where: { organizationId: interview.organizationId },
+      });
+      if (settings?.notifyOnEvaluationReady !== false) {
+        await this.notificationsService.create({
+          organizationId: interview.organizationId,
+          userId: interview.createdByUserId,
+          type: NotificationType.EVALUATION_READY,
+          title: 'AI evaluation ready',
+          body: `${interview.candidate?.name ?? 'A candidate'}'s ${interview.roundName} scored ${result.overallScore}/100.`,
+          link: `/app/interviews/${interview.id}`,
+        });
+      }
+    }
   }
 
   private buildPrompt(
