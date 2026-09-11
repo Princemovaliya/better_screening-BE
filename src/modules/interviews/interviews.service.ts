@@ -6,8 +6,11 @@ import {
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
+import { getEnv } from '@config/env';
+import { MailService } from '@core/mail';
 import { Candidate, CandidateStage } from '@module/candidates/entities';
 import { CandidatesService } from '@module/candidates/candidates.service';
+import { InterviewSessionService } from '@module/interview-session';
 import { InterviewRoundType } from '@module/jobs/entities';
 import { JobsService } from '@module/jobs/jobs.service';
 import { InterviewQuestion, Interview, InterviewStatus } from './entities';
@@ -32,6 +35,8 @@ export class InterviewsService {
     private readonly candidatesRepository: Repository<Candidate>,
     private readonly jobsService: JobsService,
     private readonly candidatesService: CandidatesService,
+    private readonly interviewSessionService: InterviewSessionService,
+    private readonly mailService: MailService,
   ) {}
 
   async schedule(
@@ -155,14 +160,30 @@ export class InterviewsService {
     if (interview.status !== InterviewStatus.SCHEDULED) {
       throw new BadRequestException('This interview has already been invited');
     }
-    // TODO(Phase 3): once InterviewSessionModule + candidate access tokens exist,
-    // issue a token and email the real interview-room link here. For now this only
-    // flips status so the recruiter-facing flow can be exercised end to end.
+
+    const rawToken = await this.interviewSessionService.issueAccessToken({
+      id: interview.id,
+      candidateId: interview.candidateId,
+      organizationId,
+    });
+    const link = `${getEnv('CANDIDATE_PORTAL_BASE_URL')}/${rawToken}`;
+    const candidateName = interview.candidate?.name?.split(' ')[0] ?? 'there';
+    const when = new Date(interview.scheduledAt).toLocaleString('en-US', {
+      weekday: 'long',
+      month: 'long',
+      day: 'numeric',
+      hour: 'numeric',
+      minute: '2-digit',
+    });
+    await this.mailService.sendMail({
+      to: interview.candidate!.email,
+      subject: `Interview Invitation — ${interview.job?.title ?? 'your application'}`,
+      html: `<p>Hi ${candidateName},</p><p>You're invited to the <b>${interview.roundName}</b> for the <b>${interview.job?.title ?? 'role'}</b> position.</p><p>Whenever you're ready (by ${when} ${interview.timezone}), click below to begin. Once you start, you'll have ${interview.durationMinutes} minutes to complete all questions.</p><p><a href="${link}">${link}</a></p>`,
+    });
+
     await this.interviewsRepository.update(
       { id, organizationId },
-      {
-        status: InterviewStatus.INVITATION_SENT,
-      },
+      { status: InterviewStatus.INVITATION_SENT },
     );
     return this.findOne(organizationId, id);
   }
@@ -176,6 +197,7 @@ export class InterviewsService {
       { id, organizationId },
       { status: InterviewStatus.CANCELLED },
     );
+    await this.interviewSessionService.revokeTokensForInterview(id);
     return this.findOne(organizationId, id);
   }
 }
