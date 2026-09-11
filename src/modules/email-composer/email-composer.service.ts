@@ -95,6 +95,7 @@ Write a warm, concise, professional "${dto.type}" email for this candidate.`;
     await this.loadCandidate(organizationId, candidateId);
     return this.emailsRepository.find({
       where: { candidateId, organizationId },
+      relations: { sentBy: true },
       order: { sentAt: 'DESC' },
     });
   }
