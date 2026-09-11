@@ -6,7 +6,7 @@ speech-to-text and evaluation pipeline. See the full architecture and build plan
 `/home/prince/.claude/plans/hi-this-is-merry-milner.md` (or wherever it's been moved to
 in this repo going forward).
 
-## Status: Phase 3 — storage + candidate portal skeleton
+## Status: Phase 4 — STT queue integration
 
 What's implemented so far:
 - Project scaffold (NestJS 11, TypeScript, path aliases `@config/*` `@core/*` `@module/*`,
@@ -28,10 +28,22 @@ What's implemented so far:
   no account), session fetch (starts the clock on first open, reports per-question
   answered state for resumability), per-question presigned upload + completion, submit
   (idempotent), and a deadline sweep that auto-submits a round whose time ran out.
+- `TranscriptIngestionModule` — the STT hand-off boundary (see queue contract below):
+  a producer that enqueues `transcript-generation` the moment a round is submitted
+  (manually or auto-submitted by the deadline sweep), and a consumer on `transcript-ready`
+  that persists `interview_transcripts` and forwards to the fully-internal
+  `evaluation-processing` queue. Both consumers are idempotent against BullMQ's
+  at-least-once delivery (checked by verified redelivery in testing, not just by
+  reading the code).
+- `src/scripts/mock-stt-worker.ts` (`npm run mock:stt-worker`) — a standalone stand-in
+  for the real vendor's own worker, for local dev only. Consumes `transcript-generation`
+  and produces a canned `transcript-ready` job back, so the whole pipeline can be
+  exercised end-to-end before a real vendor is wired in.
 
-Not yet built (see the plan file's build order): the BullMQ AI pipeline
-(`TranscriptIngestionModule`/`EvaluationModule`), `LlmModule` (question generation /
-email drafting / evaluation), notifications, dashboard, search, team management UI.
+Not yet built (see the plan file's build order): `EvaluationModule` + `LlmModule` (the
+resume/JD/transcript evaluation itself — `evaluation-processing` jobs are enqueued
+already but nothing consumes them yet), the synchronous AI question-generation /
+email-drafting endpoints, notifications, dashboard, search, team management UI.
 
 ### Candidate portal API (token-only, no JWT)
 
@@ -41,6 +53,23 @@ POST /interview-session/:token/questions/:questionId/upload-url  presigned PUT u
 POST /interview-session/:token/questions/:questionId/complete    mark answer uploaded
 POST /interview-session/:token/submit                            finish the round
 ```
+
+### AI pipeline queues (BullMQ / Redis)
+
+```
+transcript-generation   we produce, the third-party STT vendor's own worker consumes
+                         (enqueued automatically on submit/auto-submit; no resume/JD
+                         data in the payload — STT only)
+transcript-ready         the vendor produces (transcript only, no scores), we consume
+                         (TranscriptReadyProcessor persists interview_transcripts,
+                         then forwards to evaluation-processing)
+evaluation-processing    fully internal — our own producer/consumer; no consumer yet
+                         (that's EvaluationModule, a later phase)
+```
+
+For local dev without a real vendor, run `npm run mock:stt-worker` alongside the app —
+it consumes `transcript-generation` and produces a canned `transcript-ready` job so the
+pipeline can be exercised end-to-end.
 
 ## Getting started
 

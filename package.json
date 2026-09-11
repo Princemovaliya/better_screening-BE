@@ -20,7 +20,8 @@
     "migration:generate": "npm run typeorm -- migration:generate -d src/core/database/data-source.ts",
     "migration:run": "npm run typeorm -- migration:run -d src/core/database/data-source.ts",
     "migration:revert": "npm run typeorm -- migration:revert -d src/core/database/data-source.ts",
-    "seed": "ts-node -r tsconfig-paths/register src/scripts/seed.ts"
+    "seed": "ts-node -r tsconfig-paths/register src/scripts/seed.ts",
+    "mock:stt-worker": "ts-node -r tsconfig-paths/register src/scripts/mock-stt-worker.ts"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.687.0",

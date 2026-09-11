@@ -11,6 +11,7 @@ import { InterviewSessionModule } from '@module/interview-session';
 import { InterviewsModule } from '@module/interviews';
 import { JobsModule } from '@module/jobs';
 import { OrganizationsModule } from '@module/organizations';
+import { TranscriptIngestionModule } from '@module/transcript-ingestion';
 import { UsersModule } from '@module/users';
 
 @Module({
@@ -27,6 +28,7 @@ import { UsersModule } from '@module/users';
     CandidatesModule,
     InterviewsModule,
     InterviewSessionModule,
+    TranscriptIngestionModule,
   ],
   controllers: [AppController],
 })

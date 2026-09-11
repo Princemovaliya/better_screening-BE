@@ -4,6 +4,7 @@ import { Repository } from 'typeorm';
 import { hashToken, randomToken } from '@core/utils/crypt.util';
 import { StorageService } from '@core/storage';
 import { Interview, InterviewStatus } from '@module/interviews/entities';
+import { TranscriptGenerationProducerService } from '@module/transcript-ingestion';
 import {
   AccessTokenStatus,
   InterviewAccessToken,
@@ -43,6 +44,7 @@ export class InterviewSessionService {
     @InjectRepository(InterviewAnswer)
     private readonly answersRepository: Repository<InterviewAnswer>,
     private readonly storageService: StorageService,
+    private readonly transcriptGenerationProducer: TranscriptGenerationProducerService,
   ) {}
 
   // ---- Called by InterviewsModule when a recruiter sends an invitation ----
@@ -114,6 +116,9 @@ export class InterviewSessionService {
       { interviewId, status: AccessTokenStatus.ACTIVE },
       { status: AccessTokenStatus.USED, consumedAt: new Date() },
     );
+    // Hand off to the STT vendor with whatever was recorded — enqueueForInterview is a
+    // no-op if nothing was answered (e.g. the deadline hit before question 1).
+    await this.transcriptGenerationProducer.enqueueForInterview(interviewId);
   }
 
   async getSession(session: CandidateSessionContext): Promise<CandidateSessionResponse> {
