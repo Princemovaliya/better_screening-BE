@@ -6,7 +6,7 @@ speech-to-text and evaluation pipeline. See the full architecture and build plan
 `/home/prince/.claude/plans/hi-this-is-merry-milner.md` (or wherever it's been moved to
 in this repo going forward).
 
-## Status: Phase 1 — foundation
+## Status: Phase 3 — storage + candidate portal skeleton
 
 What's implemented so far:
 - Project scaffold (NestJS 11, TypeScript, path aliases `@config/*` `@core/*` `@module/*`,
@@ -15,19 +15,32 @@ What's implemented so far:
   inbox for dev).
 - Core cross-cutting pieces: global exception filter + response envelope
   (`{isError, message, data}`), env loader (no `@nestjs/config`), JWT (`@nestjs/jwt` +
-  `@nestjs/passport`), a minimal `MailService` (nodemailer).
-- `OrganizationsModule` — org profile + settings (1:1), created with sensible defaults
-  on signup.
-- `UsersModule` — org-scoped users, roles (`admin`/`recruiter`).
-- `AuthModule` — signup (creates an Organization + its first admin user), login,
-  forgot/reset password, team invite + accept-invite. All wired to real Postgres via
-  TypeORM, with a migration already generated and applied.
+  `@nestjs/passport`), a `MailService` (nodemailer), `StorageService` (S3-compatible,
+  AWS SDK v3 — presigned upload/download URLs, works against MinIO or real S3).
+- `OrganizationsModule`, `UsersModule`, `AuthModule` — org signup/login, team invite,
+  password reset.
+- `JobsModule` — jobs with nested skills + interview round templates + per-round
+  questions.
+- `CandidatesModule` — candidate CRUD, forward-only stage transitions, notes.
+- `InterviewsModule` — schedule/reschedule/cancel, send-invitation (now issues a real
+  candidate access token and emails the real interview-room link).
+- `InterviewSessionModule` — the **candidate portal** backend: token-only auth (no JWT,
+  no account), session fetch (starts the clock on first open, reports per-question
+  answered state for resumability), per-question presigned upload + completion, submit
+  (idempotent), and a deadline sweep that auto-submits a round whose time ran out.
 
-Not yet built (see the plan file's build order): Jobs/Candidates/Interviews CRUD, the
-candidate portal (`InterviewSessionModule`), the BullMQ queue pipeline
-(`TranscriptIngestionModule`/`EvaluationModule`), `StorageModule` (S3/MinIO recordings +
-resumes), `LlmModule` (question generation / email drafting / evaluation), notifications,
-dashboard, search.
+Not yet built (see the plan file's build order): the BullMQ AI pipeline
+(`TranscriptIngestionModule`/`EvaluationModule`), `LlmModule` (question generation /
+email drafting / evaluation), notifications, dashboard, search, team management UI.
+
+### Candidate portal API (token-only, no JWT)
+
+```
+GET  /interview-session/:token                                  session + questions
+POST /interview-session/:token/questions/:questionId/upload-url  presigned PUT url
+POST /interview-session/:token/questions/:questionId/complete    mark answer uploaded
+POST /interview-session/:token/submit                            finish the round
+```
 
 ## Getting started
 
