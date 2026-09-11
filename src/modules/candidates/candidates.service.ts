@@ -76,8 +76,14 @@ export class CandidatesService {
   async findOne(organizationId: string, id: string): Promise<Candidate> {
     const candidate = await this.candidatesRepository.findOne({
       where: { id, organizationId },
-      relations: { skills: true, job: true, notes: { author: true } },
-      order: { notes: { createdAt: 'DESC' } },
+      // job.rounds is loaded here (not just the job's own fields) because the
+      // "schedule interview" flow on the candidate details page needs the job's
+      // round templates to populate its round picker.
+      relations: { skills: true, job: { rounds: { questions: true } }, notes: { author: true } },
+      order: {
+        notes: { createdAt: 'DESC' },
+        job: { rounds: { orderIndex: 'ASC', questions: { orderIndex: 'ASC' } } },
+      },
     });
     if (!candidate) throw new NotFoundException('Candidate not found');
     return candidate;
