@@ -15,7 +15,7 @@ import { TransformInterceptor } from '@core/dispatchers';
 import { CurrentOrgUser } from '@module/auth/decorators';
 import { OrgAuthGuard } from '@module/auth/guards';
 import { AuthenticatedOrgUser } from '@module/auth/types/jwt-payload.type';
-import { CreateJobDto, ListJobsQueryDto, UpdateJobDto } from './dto';
+import { CreateJobDto, GenerateQuestionsDto, ListJobsQueryDto, UpdateJobDto } from './dto';
 import { JobsService } from './jobs.service';
 
 @ApiTags('Jobs')
@@ -53,5 +53,15 @@ export class JobsController {
   @Delete(':id')
   remove(@CurrentOrgUser() user: AuthenticatedOrgUser, @Param('id') id: string) {
     return this.jobsService.remove(user.organizationId, id);
+  }
+
+  @Post(':id/rounds/:roundId/questions/generate')
+  generateQuestions(
+    @CurrentOrgUser() user: AuthenticatedOrgUser,
+    @Param('id') id: string,
+    @Param('roundId') roundId: string,
+    @Body() dto: GenerateQuestionsDto,
+  ) {
+    return this.jobsService.generateQuestions(user.organizationId, id, roundId, dto);
   }
 }

@@ -1,8 +1,23 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
-import { EmploymentType, InterviewRoundTemplate, Job, JobSkill, JobStatus } from './entities';
-import { CreateJobDto, ListJobsQueryDto, UpdateJobDto } from './dto';
+import { LlmService } from '@core/llm';
+import {
+  EmploymentType,
+  InterviewRoundTemplate,
+  InterviewRoundType,
+  Job,
+  JobSkill,
+  JobStatus,
+  QuestionType,
+} from './entities';
+import {
+  CreateJobDto,
+  GeneratedQuestion,
+  GenerateQuestionsDto,
+  ListJobsQueryDto,
+  UpdateJobDto,
+} from './dto';
 
 @Injectable()
 export class JobsService {
@@ -13,6 +28,7 @@ export class JobsService {
     private readonly jobSkillsRepository: Repository<JobSkill>,
     @InjectRepository(InterviewRoundTemplate)
     private readonly roundTemplatesRepository: Repository<InterviewRoundTemplate>,
+    private readonly llmService: LlmService,
   ) {}
 
   async create(organizationId: string, createdByUserId: string, dto: CreateJobDto): Promise<Job> {
@@ -122,5 +138,60 @@ export class JobsService {
   async remove(organizationId: string, id: string): Promise<void> {
     const result = await this.jobsRepository.delete({ id, organizationId });
     if (result.affected === 0) throw new NotFoundException('Job not found');
+  }
+
+  /** Suggests questions for an existing round — a pure LLM call, nothing persisted.
+   * The recruiter edits/reorders/drops suggestions client-side, then saves the round
+   * (with whichever questions they kept) via the normal `update()` endpoint. */
+  async generateQuestions(
+    organizationId: string,
+    jobId: string,
+    roundId: string,
+    dto: GenerateQuestionsDto,
+  ): Promise<GeneratedQuestion[]> {
+    const job = await this.findOne(organizationId, jobId);
+    const round = (job.rounds ?? []).find((r) => r.id === roundId);
+    if (!round) throw new NotFoundException('Interview round not found on this job');
+
+    const count = dto.count ?? 5;
+    const skillsList =
+      (job.skills ?? [])
+        .map((s) => `- ${s.name} (${s.level}, ${s.importance} priority)`)
+        .join('\n') || '(none listed)';
+    const existingQuestions =
+      (round.questions ?? []).map((q) => `- ${q.questionText}`).join('\n') || '(none yet)';
+
+    const system = `You are an expert technical interviewer. Given a job's details and an interview round's type, suggest new interview questions for that round. Respond with ONLY a JSON object (no markdown fences, no commentary) matching exactly this shape:
+{ "questions": [ { "questionText": <string>, "questionType": "technical" | "behavioral" | "situational" | "experience" | "culture" }, ... exactly ${count} entries ] }`;
+
+    const prompt = `## Job
+Title: ${job.title}
+Department: ${job.department}
+Description: ${job.description || '(none provided)'}
+Required skills:
+${skillsList}
+
+## Round
+Name: ${round.name}
+Type: ${round.type}
+Duration: ${round.durationMinutes} minutes
+
+## Already-asked questions in this round (don't repeat these)
+${existingQuestions}
+${dto.additionalContext ? `\n## Recruiter's guidance\n${dto.additionalContext}` : ''}
+
+Suggest ${count} new, non-redundant questions appropriate for a "${round.type}" round.`;
+
+    const result = await this.llmService.completeJson<{ questions: GeneratedQuestion[] }>(
+      { system, prompt },
+      () => ({
+        questions: Array.from({ length: count }, (_, i) => ({
+          questionText: `[mock] Sample ${round.type} question #${i + 1} for a ${job.title} candidate.`,
+          questionType:
+            round.type === InterviewRoundType.HR ? QuestionType.CULTURE : QuestionType.TECHNICAL,
+        })),
+      }),
+    );
+    return result.questions;
   }
 }

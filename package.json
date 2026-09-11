@@ -24,6 +24,7 @@
     "mock:stt-worker": "ts-node -r tsconfig-paths/register src/scripts/mock-stt-worker.ts"
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "^0.65.0",
     "@aws-sdk/client-s3": "^3.687.0",
     "@aws-sdk/s3-request-presigner": "^3.687.0",
     "@nestjs/bullmq": "^12.0.0",
@@ -51,10 +52,10 @@
     "uuid": "^11.0.3"
   },
   "devDependencies": {
+    "@eslint/js": "^9.17.0",
     "@nestjs/cli": "^11.0.22",
     "@nestjs/schematics": "^11.0.9",
     "@nestjs/testing": "^11.2.1",
-    "@eslint/js": "^9.17.0",
     "@types/bcrypt": "^5.0.2",
     "@types/compression": "^1.7.5",
     "@types/express": "^5.0.0",
@@ -80,16 +81,24 @@
     "typescript-eslint": "^8.18.2"
   },
   "jest": {
-    "moduleFileExtensions": ["js", "json", "ts"],
+    "moduleFileExtensions": [
+      "js",
+      "json",
+      "ts"
+    ],
     "rootDir": "src",
     "testRegex": ".*\\.spec\\.ts$",
     "transform": {
       "^.+\\.(t|j)s$": "ts-jest"
     },
-    "transformIgnorePatterns": ["node_modules/(?!(@nestjs/bullmq|@nestjs/bull-shared)/)"],
+    "transformIgnorePatterns": [
+      "node_modules/(?!(@nestjs/bullmq|@nestjs/bull-shared)/)"
+    ],
     "maxWorkers": 1,
     "passWithNoTests": true,
-    "collectCoverageFrom": ["**/*.(t|j)s"],
+    "collectCoverageFrom": [
+      "**/*.(t|j)s"
+    ],
     "coverageDirectory": "../coverage",
     "testEnvironment": "node",
     "moduleNameMapper": {

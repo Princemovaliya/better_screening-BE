@@ -58,4 +58,9 @@ export class InterviewsController {
   cancel(@CurrentOrgUser() user: AuthenticatedOrgUser, @Param('id') id: string) {
     return this.interviewsService.cancel(user.organizationId, id);
   }
+
+  @Post(':id/retry-evaluation')
+  retryEvaluation(@CurrentOrgUser() user: AuthenticatedOrgUser, @Param('id') id: string) {
+    return this.interviewsService.retryEvaluation(user.organizationId, id);
+  }
 }

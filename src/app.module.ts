@@ -2,11 +2,14 @@ import { Module } from '@nestjs/common';
 import { AppController } from './app.controller';
 import { DatabaseModule } from '@core/database';
 import { JwtCoreModule } from '@core/jwt';
+import { LlmModule } from '@core/llm';
 import { MailModule } from '@core/mail';
 import { QueueModule } from '@core/queue';
 import { StorageModule } from '@core/storage';
 import { AuthModule } from '@module/auth';
 import { CandidatesModule } from '@module/candidates';
+import { EmailComposerModule } from '@module/email-composer';
+import { EvaluationModule } from '@module/evaluation';
 import { InterviewSessionModule } from '@module/interview-session';
 import { InterviewsModule } from '@module/interviews';
 import { JobsModule } from '@module/jobs';
@@ -18,6 +21,7 @@ import { UsersModule } from '@module/users';
   imports: [
     DatabaseModule,
     JwtCoreModule,
+    LlmModule,
     MailModule,
     QueueModule,
     StorageModule,
@@ -29,6 +33,8 @@ import { UsersModule } from '@module/users';
     InterviewsModule,
     InterviewSessionModule,
     TranscriptIngestionModule,
+    EvaluationModule,
+    EmailComposerModule,
   ],
   controllers: [AppController],
 })

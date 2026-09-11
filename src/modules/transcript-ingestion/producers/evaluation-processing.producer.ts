@@ -28,4 +28,29 @@ export class EvaluationProcessingProducerService {
     });
     this.logger.log(`Enqueued evaluation-processing for interview ${payload.interviewId}`);
   }
+
+  /** Manual retry (the admin `retry-evaluation` endpoint). `enqueue`'s fixed
+   * `jobId: interviewId` means a plain `queue.add()` here would silently no-op against
+   * a job still sitting in the `failed` set (kept via `removeOnFail: false` for
+   * inspection) — BullMQ dedupes by jobId and won't create a second attempt. So: if a
+   * failed job exists, explicitly `.retry()` it; if one is already waiting/active,
+   * leave it alone; otherwise fall back to a normal `enqueue`. */
+  async retry(payload: EvaluationProcessingJobPayload): Promise<void> {
+    const existing = await this.queue.getJob(payload.interviewId);
+    if (existing) {
+      const state = await existing.getState();
+      if (state === 'failed') {
+        await existing.retry();
+        this.logger.log(
+          `Retried failed evaluation-processing job for interview ${payload.interviewId}`,
+        );
+        return;
+      }
+      this.logger.log(
+        `evaluation-processing job for interview ${payload.interviewId} is already "${state}" — not re-adding`,
+      );
+      return;
+    }
+    await this.enqueue(payload);
+  }
 }

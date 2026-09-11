@@ -13,6 +13,7 @@ import { CandidatesService } from '@module/candidates/candidates.service';
 import { InterviewSessionService } from '@module/interview-session';
 import { InterviewRoundType } from '@module/jobs/entities';
 import { JobsService } from '@module/jobs/jobs.service';
+import { EvaluationProcessingProducerService } from '@module/transcript-ingestion';
 import { InterviewQuestion, Interview, InterviewStatus } from './entities';
 import { ListInterviewsQueryDto, RescheduleInterviewDto, ScheduleInterviewDto } from './dto';
 
@@ -37,6 +38,7 @@ export class InterviewsService {
     private readonly candidatesService: CandidatesService,
     private readonly interviewSessionService: InterviewSessionService,
     private readonly mailService: MailService,
+    private readonly evaluationProcessingProducer: EvaluationProcessingProducerService,
   ) {}
 
   async schedule(
@@ -199,5 +201,25 @@ export class InterviewsService {
     );
     await this.interviewSessionService.revokeTokensForInterview(id);
     return this.findOne(organizationId, id);
+  }
+
+  /** Re-enqueues `evaluation-processing` for an interview — e.g. after fixing an LLM
+   * config issue, or once a previously-failed transcription has been redone. A no-op
+   * from the recruiter's point of view if the transcript still isn't ready; the
+   * consumer just logs and skips again until it is. */
+  async retryEvaluation(organizationId: string, id: string): Promise<Interview> {
+    const interview = await this.findOne(organizationId, id);
+    if (
+      interview.status !== InterviewStatus.PENDING_EVALUATION &&
+      interview.status !== InterviewStatus.COMPLETED
+    ) {
+      throw new BadRequestException('This interview has not been submitted yet');
+    }
+    await this.evaluationProcessingProducer.retry({
+      interviewId: interview.id,
+      candidateId: interview.candidateId,
+      organizationId,
+    });
+    return interview;
   }
 }

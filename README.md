@@ -6,7 +6,7 @@ speech-to-text and evaluation pipeline. See the full architecture and build plan
 `/home/prince/.claude/plans/hi-this-is-merry-milner.md` (or wherever it's been moved to
 in this repo going forward).
 
-## Status: Phase 4 — STT queue integration
+## Status: Phase 5 — LLM integration (evaluation, question generation, email drafting)
 
 What's implemented so far:
 - Project scaffold (NestJS 11, TypeScript, path aliases `@config/*` `@core/*` `@module/*`,
@@ -40,10 +40,32 @@ What's implemented so far:
   and produces a canned `transcript-ready` job back, so the whole pipeline can be
   exercised end-to-end before a real vendor is wired in.
 
-Not yet built (see the plan file's build order): `EvaluationModule` + `LlmModule` (the
-resume/JD/transcript evaluation itself — `evaluation-processing` jobs are enqueued
-already but nothing consumes them yet), the synchronous AI question-generation /
-email-drafting endpoints, notifications, dashboard, search, team management UI.
+- `LlmModule` (`src/core/llm`) — a thin, generic "prompt in, structured JSON out"
+  wrapper over the Anthropic API (`@anthropic-ai/sdk`), config-driven via
+  `LLM_PROVIDER`/`LLM_API_KEY`/`LLM_MODEL`. `LLM_PROVIDER=mock` makes every call site
+  return its own deterministic canned response instead of a real call — useful for
+  local dev/testing without a key (set it in your own `.env`; `.env.example` documents
+  the real default, `anthropic`).
+- `EvaluationModule` — owns the actual evaluation logic (resume × job description ×
+  transcript), entirely our own LLM call, never the STT vendor's. Consumes the
+  internal `evaluation-processing` queue, validates the LLM's structured response
+  before persisting anything, writes `interview_summaries` +
+  `interview_question_analyses` in one transaction, flips the interview to
+  `completed`, and updates the candidate's `overallScore`. Idempotent (skips if a
+  summary already exists for the interview) and exposes
+  `GET /interviews/:id/evaluation` (status: `not_submitted` / `transcribing` /
+  `transcription_failed` / `evaluating` / `completed`) plus
+  `POST /interviews/:id/retry-evaluation` (re-enqueues; explicitly retries a job still
+  sitting in BullMQ's failed set rather than silently no-opping against it).
+- `JobsModule` gained `POST /jobs/:id/rounds/:roundId/questions/generate` — an LLM
+  question-suggestion endpoint (nothing persisted; the recruiter edits/keeps/discards
+  before saving via the normal job-update endpoint).
+- `EmailComposerModule` (new) — `POST /candidates/:id/emails/compose` (LLM draft,
+  nothing sent yet), `POST /candidates/:id/emails/send` (sends via `MailService` and
+  logs to `candidate_emails`), `GET /candidates/:id/emails` (history).
+
+Not yet built (see the plan file's build order): notifications, dashboard
+KPIs/activity feed, search, team management UI, settings pages.
 
 ### Candidate portal API (token-only, no JWT)
 
