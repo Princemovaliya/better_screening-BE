@@ -1,4 +1,4 @@
-import { Controller, Get, UseGuards, UseInterceptors } from '@nestjs/common';
+import { Controller, Get, Query, UseGuards, UseInterceptors } from '@nestjs/common';
 import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
 import { TransformInterceptor } from '@core/dispatchers';
 import { CurrentOrgUser } from '@module/auth/decorators';
@@ -15,7 +15,9 @@ export class DashboardController {
   constructor(private readonly dashboardService: DashboardService) {}
 
   @Get()
-  getOverview(@CurrentOrgUser() user: AuthenticatedOrgUser) {
-    return this.dashboardService.getOverview(user.organizationId);
+  getOverview(@CurrentOrgUser() user: AuthenticatedOrgUser, @Query('days') days?: string) {
+    const parsed = days ? Number(days) : undefined;
+    const period = parsed && parsed > 0 && parsed <= 90 ? parsed : 30;
+    return this.dashboardService.getOverview(user.organizationId, period);
   }
 }
